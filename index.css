@@ -1,0 +1,29 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600;700&display=swap');
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: #020817;
+  color: #e2e8f0;
+  font-family: 'DM Sans', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track { background: #0a0f1e; }
+::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #334155; }
+
+* { scrollbar-width: thin; scrollbar-color: #1e293b #0a0f1e; }
