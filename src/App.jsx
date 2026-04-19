@@ -5,7 +5,6 @@ import {
   doc, query, where, orderBy, Timestamp, onSnapshot
 } from "firebase/firestore";
 import QRCode from "qrcode";
-import { collection, getDocs } from "firebase/firestore";
 
 // ─── FIREBASE CONFIG ────────────────────────────────────────────────────────
 // Replace with your actual Firebase config from .env
@@ -122,7 +121,7 @@ const sendWhatsApp = (booking) => {
 
   const url = `https://wa.me/${CONFIG.whatsappNumber}?text=${message}`;
 
-  window.location.href = url;
+ window.open(url, "_blank");
 };
 // ─── QR CODE MODAL ────────────────────────────────────────────────────────────
 function QRModal({ sport, onClose }) {
@@ -191,9 +190,13 @@ function BookingForm({ bookedSlots, onBook }) {
         name: name.trim(),
         phone: phone.trim(),
         amount: sportConfig.pricePerHour,
-        createdAt: Timestamp.now(),
+        createdAt: new Date(),
       };
-      await addDoc(collection(db, "bookings"), booking);
+      console.log("Saving booking:", booking);
+
+await addDoc(collection(db, "bookings"), booking);
+
+console.log("Booking saved successfully");
       setSuccess(true);
       setTimeout(() => {
         setSuccess(false);
@@ -248,7 +251,7 @@ function BookingForm({ bookedSlots, onBook }) {
 
       {/* Slot Grid */}
      {sportConfig.slots.map((s) => {
-  const booked = bookings.some(
+ const booked = bookedSlots.some(
     b => b.date === date && b.slot === s && b.sport === sport
   );
 
