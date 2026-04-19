@@ -5,6 +5,7 @@ import {
   doc, query, where, orderBy, Timestamp, onSnapshot
 } from "firebase/firestore";
 import QRCode from "qrcode";
+import { collection, getDocs } from "firebase/firestore";
 
 // ─── FIREBASE CONFIG ────────────────────────────────────────────────────────
 // Replace with your actual Firebase config from .env
@@ -107,21 +108,22 @@ const formatCurrency = (n) =>
 
 const sendWhatsApp = (booking) => {
   const sport = CONFIG.sports[booking.sport];
-  const msg = encodeURIComponent(
-    `🎉 Booking Confirmed!\n\n` +
-    `📍 ${CONFIG.arenaName}\n` +
-    `🏟️ Sport: ${sport.name}\n` +
-    `📅 Date: ${formatDate(booking.date)}\n` +
-    `⏰ Slot: ${booking.slot}\n` +
-    `👤 Name: ${booking.name}\n` +
-    `📞 Phone: ${booking.phone}\n` +
-    `💰 Amount: ${formatCurrency(sport.pricePerHour)}\n\n` +
-    `UPI: ${CONFIG.upiId}\n` +
-    `See you at the arena! 🏆`
-  );
-  window.open(`https://wa.me/${CONFIG.whatsappNumber}?text=${msg}`, "_blank");
-};
 
+  const message = encodeURIComponent(
+    `🏟 MJ Sports Arena Booking\n\n` +
+    `Name: ${booking.name}\n` +
+    `Phone: ${booking.phone}\n` +
+    `Sport: ${sport.name}\n` +
+    `Date: ${booking.date}\n` +
+    `Slot: ${booking.slot}\n\n` +
+    `Amount: ₹${sport.pricePerHour}\n` +
+    `UPI: ${CONFIG.upiId}`
+  );
+
+  const url = `https://wa.me/${CONFIG.whatsappNumber}?text=${message}`;
+
+  window.location.href = url;
+};
 // ─── QR CODE MODAL ────────────────────────────────────────────────────────────
 function QRModal({ sport, onClose }) {
   const [qrUrl, setQrUrl] = useState("");
@@ -245,31 +247,41 @@ function BookingForm({ bookedSlots, onBook }) {
       />
 
       {/* Slot Grid */}
-      <label style={styles.label}>Available Slots — {formatDate(date)}</label>
-      <div style={styles.slotGrid}>
-        {sportConfig.slots.map((s) => {
-          const booked = bookedSlotsForDay.includes(s);
-          const selected = slot === s;
-          return (
-            <button
-              key={s}
-              disabled={booked}
-              onClick={() => !booked && setSlot(s)}
-              style={{
-                ...styles.slotBtn,
-                background: booked ? "#1e293b" : selected ? sportConfig.color : "transparent",
-                color: booked ? "#475569" : selected ? "#000" : "#cbd5e1",
-                border: `1.5px solid ${booked ? "#1e293b" : selected ? sportConfig.color : "#334155"}`,
-                cursor: booked ? "not-allowed" : "pointer",
-                textDecoration: booked ? "line-through" : "none",
-              }}
-            >
-              {s}
-              {booked && <span style={{ fontSize: 9, display: "block", color: "#475569" }}>Booked</span>}
-            </button>
-          );
-        })}
-      </div>
+     {sportConfig.slots.map((s) => {
+  const booked = bookings.some(
+    b => b.date === date && b.slot === s && b.sport === sport
+  );
+
+  const selected = slot === s;
+
+  return (
+    <button
+      key={s}
+      disabled={booked}
+      onClick={() => !booked && setSlot(s)}
+      style={{
+        ...styles.slotBtn,
+        background: booked
+          ? "#1e293b"
+          : selected
+          ? sportConfig.color
+          : "transparent",
+        color: booked
+          ? "#475569"
+          : selected
+          ? "#000"
+          : "#cbd5e1",
+        border: `1.5px solid ${
+          booked ? "#1e293b" : selected ? sportConfig.color : "#334155"
+        }`,
+        cursor: booked ? "not-allowed" : "pointer",
+        textDecoration: booked ? "line-through" : "none",
+      }}
+    >
+      {s}
+    </button>
+  );
+})}
 
       {/* User Details */}
       <label style={styles.label}>Your Name</label>
