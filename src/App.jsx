@@ -19,7 +19,11 @@ const firebaseConfig = {
 console.log("Firebase Project ID:", import.meta.env.VITE_FIREBASE_PROJECT_ID);
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+import { initializeFirestore } from "firebase/firestore";
+
+const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+});
 
 function generateSlots(startHour, endHour, duration = 1, courts = 1) {
   const slots = [];
@@ -122,7 +126,7 @@ const sendWhatsApp = (booking) => {
 
   const url = `https://wa.me/${CONFIG.whatsappNumber}?text=${message}`;
 
- window.open(url, "_blank");
+ window.location.href = `https://wa.me/${CONFIG.whatsappNumber}?text=${msg}`;
 };
 // ─── QR CODE MODAL ────────────────────────────────────────────────────────────
 function QRModal({ sport, onClose }) {
