@@ -261,12 +261,10 @@ console.log("Booking saved successfully");
   console.log("Checking slot:", s, bookedSlots); // DEBUG
 
   const booked = bookedSlots.find((b) => {
-  console.log("Comparing:", b.date, date, b.slot, s, b.sport, sport);
-
   return (
-    String(b.date).slice(0, 10) === String(date).slice(0, 10) &&
-    String(b.slot).trim().toLowerCase() === String(s).trim().toLowerCase() &&
-    String(b.sport).trim() === String(sport).trim()
+    b.date === date &&
+    b.slot.toLowerCase() === s.toLowerCase() &&
+    b.sport === sport
   );
 });
 
