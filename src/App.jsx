@@ -16,7 +16,7 @@ const firebaseConfig = {
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
-console.log("Firebase Project ID:", import.meta.env.VITE_FIREBASE_PROJECT_ID);
+
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
@@ -186,7 +186,7 @@ function BookingForm({ bookedSlots, onBook }) {
       const booking = {
         sport,
         date,
-        slot,
+       slot: slot.trim().toLowerCase(),
         name: name.trim(),
         phone: phone.trim(),
         amount: sportConfig.pricePerHour,
@@ -195,6 +195,8 @@ function BookingForm({ bookedSlots, onBook }) {
       console.log("Saving booking:", booking);
 
 await addDoc(collection(db, "bookings"), booking);
+const snap = await getDocs(collection(db, "bookings"));
+setBookings(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
 
 console.log("Booking saved successfully");
       setSuccess(true);
@@ -205,7 +207,7 @@ console.log("Booking saved successfully");
         setPhone("");
       }, 3000);
       // WhatsApp confirmation
-      setTimeout(() => sendWhatsApp(booking), 500);
+     sendWhatsApp(booking);
     } catch (e) {
       setError("Booking failed. Check your internet connection.");
     } finally {
@@ -251,16 +253,24 @@ console.log("Booking saved successfully");
 
       {/* Slot Grid */}
      {sportConfig.slots.map((s) => {
- const booked = bookedSlots.some(
-    b => b.date === date && b.slot === s && b.sport === sport
+  console.log("Checking slot:", s, bookedSlots); // DEBUG
+
+  const booked = bookedSlots.find((b) => {
+  console.log("Comparing:", b.date, date, b.slot, s, b.sport, sport);
+
+  return (
+    String(b.date).slice(0, 10) === String(date).slice(0, 10) &&
+    String(b.slot).trim().toLowerCase() === String(s).trim().toLowerCase() &&
+    String(b.sport).trim() === String(sport).trim()
   );
+});
 
   const selected = slot === s;
 
   return (
     <button
       key={s}
-      disabled={booked}
+      disabled={!!booked}
       onClick={() => !booked && setSlot(s)}
       style={{
         ...styles.slotBtn,
@@ -594,15 +604,22 @@ export default function App() {
   const [view, setView] = useState("home"); // home | admin | adminLogin
   const [adminLoggedIn, setAdminLoggedIn] = useState(false);
 
-  useEffect(() => {
-    const unsub = onSnapshot(
-      query(collection(db, "bookings"), orderBy("createdAt", "desc")),
-      (snap) => {
-        setBookings(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      }
-    );
-    return unsub;
-  }, []);
+ useEffect(() => {
+  const fetchBookings = async () => {
+    try {
+      const snap = await getDocs(collection(db, "bookings"));
+      const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+      console.log("Fetched bookings:", data);
+
+      setBookings(data);
+    } catch (err) {
+      console.error("Error fetching bookings:", err);
+    }
+  };
+
+  fetchBookings();
+}, []);
 
   const handleBook = (booking) => {
     setBookings((prev) => [{ ...booking }, ...prev]);
