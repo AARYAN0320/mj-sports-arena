@@ -490,7 +490,6 @@ if (!isFirebaseReady) {
   const cleanSlot = s.trim();
   const booked = bookedSlotsForDay.includes(cleanSlot);
   const selected = slot === cleanSlot;
-          const selected = slot === s;
           return (
             <button
               key={s}
