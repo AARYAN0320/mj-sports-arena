@@ -494,7 +494,7 @@ if (!isFirebaseReady) {
             <button
               key={s}
               disabled={booked}
-              oonClick={() => !booked && setSlot(cleanSlot)}
+             onClick={() => !booked && setSlot(cleanSlot)}  // 🔥 USE cleanSlot
               style={{
                 ...styles.slotBtn,
                 background: booked ? "#1e293b" : selected ? sportConfig.color : "transparent",
