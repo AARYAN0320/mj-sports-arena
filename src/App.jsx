@@ -426,7 +426,32 @@ function BookingForm({ bookedSlots, isFirebaseReady = false }) {
     }
   };
 
-  const today = getTodayStr();
+const today = getTodayStr();
+
+// 🔥 ADD THIS BLOCK HERE 👇
+if (!isFirebaseReady) {
+  return (
+    <div style={styles.formCard}>
+      <div style={{ 
+        textAlign: "center", 
+        padding: "3rem", 
+        color: "#94a3b8",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: "1rem"
+      }}>
+        <div style={{ fontSize: "2.5rem" }}>⚡</div>
+        <div style={{ fontSize: "1.1rem", fontWeight: "600" }}>
+          Loading available slots...
+        </div>
+        <div style={{ fontSize: "0.9rem", opacity: 0.7 }}>
+          Connecting to Firebase (2 seconds)
+        </div>
+      </div>
+    </div>
+  );
+}
 
   return (
     <div style={styles.formCard}>
@@ -466,30 +491,6 @@ function BookingForm({ bookedSlots, isFirebaseReady = false }) {
   const booked = bookedSlotsForDay.includes(cleanSlot);
   const selected = slot === cleanSlot;
           const selected = slot === s;
-// 🔥 ADD THIS BEFORE "return (...)"
-if (!isFirebaseReady) {
-  return (
-    <div style={styles.formCard}>
-      <div style={{ 
-        textAlign: "center", 
-        padding: "3rem", 
-        color: "#94a3b8",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: "1rem"
-      }}>
-        <div style={{ fontSize: "2.5rem" }}>⚡</div>
-        <div style={{ fontSize: "1.1rem", fontWeight: "600" }}>
-          Loading available slots...
-        </div>
-        <div style={{ fontSize: "0.9rem", opacity: 0.7 }}>
-          Connecting to Firebase (2 seconds)
-        </div>
-      </div>
-    </div>
-  );
-}
           return (
             <button
               key={s}
@@ -656,6 +657,7 @@ function AdminLogin({ onLogin }) {
 
 function AdminDashboard({ bookings, onCancel, onLogout }) {
   const today = getTodayStr();
+
   const todayBookings = bookings.filter(b => b.date === today);
 
   return (
