@@ -1,13 +1,12 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { initializeApp } from "firebase/app";
 import {
   getFirestore, collection, addDoc, getDocs, deleteDoc,
-  doc, query, where, orderBy, Timestamp, onSnapshot
+  doc, onSnapshot, query, orderBy
 } from "firebase/firestore";
 import QRCode from "qrcode";
 
-// ─── FIREBASE CONFIG ────────────────────────────────────────────────────────
-// Replace with your actual Firebase config from .env
+// ─── FIREBASE CONFIG ──────────────────────────────────────────────────────────
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -16,27 +15,21 @@ const firebaseConfig = {
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
-console.log("Firebase Project ID:", import.meta.env.VITE_FIREBASE_PROJECT_ID);
 
 const app = initializeApp(firebaseConfig);
-import { initializeFirestore } from "firebase/firestore";
+const db = getFirestore(app);
 
-const db = initializeFirestore(app, {
-  experimentalForceLongPolling: true,
-});
+console.log("Firebase Project ID:", import.meta.env.VITE_FIREBASE_PROJECT_ID);
 
 function generateSlots(startHour, endHour, duration = 1, courts = 1) {
   const slots = [];
-
   for (let h = startHour; h < endHour; h += duration) {
     const start = formatHour(h);
     const end = formatHour(h + duration);
-
     for (let c = 1; c <= courts; c++) {
       slots.push(`${start} - ${end} (Court ${c})`);
     }
   }
-
   return slots;
 }
 
@@ -46,7 +39,7 @@ function formatHour(hour) {
   return `${h}:00 ${ampm}`;
 }
 
-// ─── CONFIGURATION ─────────────────────────────────────────
+// ─── CONFIGURATION ────────────────────────────────────────────────────────────
 const CONFIG = {
   arenaName: "MJ Sports Arena",
   adminPassword: import.meta.env.VITE_ADMIN_PASSWORD || "admin123",
@@ -54,51 +47,244 @@ const CONFIG = {
   whatsappNumber: import.meta.env.VITE_WHATSAPP_NUMBER || "919876543210",
 
   sports: {
-   cricket: {
-  name: "Cricket",
-  emoji: "🏏",
-  pricePerHour: 1200,
-  color: "#f59e0b",
-  slots: [
-    "5:00 AM - 6:00 AM",
-    "6:00 AM - 7:00 AM",
-    "7:00 AM - 8:00 AM",
-    "8:00 AM - 9:00 AM",
-    "9:00 AM - 10:00 AM",
-    "10:00 AM - 11:00 AM",
-    "11:00 AM - 12:00 PM",
-    "12:00 PM - 1:00 PM",
-    "1:00 PM - 2:00 PM",
-    "2:00 PM - 3:00 PM",
-    "3:00 PM - 4:00 PM",
-    "4:00 PM - 5:00 PM",
-    "5:00 PM - 6:00 PM",
-    "6:00 PM - 7:00 PM",
-    "7:00 PM - 8:00 PM",
-    "8:00 PM - 9:00 PM",
-    "9:00 PM - 10:00 PM",
-    "10:00 PM - 11:00 PM"
-  ]
-},
-
+    cricket: {
+      name: "Cricket",
+      emoji: "🏏",
+      pricePerHour: 1200,
+      color: "#f59e0b",
+      slots: [
+        "5:00 AM - 6:00 AM", "6:00 AM - 7:00 AM", "7:00 AM - 8:00 AM",
+        "8:00 AM - 9:00 AM", "9:00 AM - 10:00 AM", "10:00 AM - 11:00 AM",
+        "11:00 AM - 12:00 PM", "12:00 PM - 1:00 PM", "1:00 PM - 2:00 PM",
+        "2:00 PM - 3:00 PM", "3:00 PM - 4:00 PM", "4:00 PM - 5:00 PM",
+        "5:00 PM - 6:00 PM", "6:00 PM - 7:00 PM", "7:00 PM - 8:00 PM",
+        "8:00 PM - 9:00 PM", "9:00 PM - 10:00 PM", "10:00 PM - 11:00 PM"
+      ]
+    },
     pickleball: {
       name: "Pickleball",
       emoji: "🏓",
       pricePerHour: 600,
       color: "#22c55e",
-      slots: generateSlots(5, 23, 1, 2) // 2 courts
+      slots: generateSlots(5, 23, 1, 2)
     }
   }
 };
 
-// ─── HELPERS ───────────────────────────────────────────────
+// ─── STYLES ───────────────────────────────────────────────────────────────────
+const styles = {
+  root: {
+    background: "linear-gradient(135deg, #020817 0%, #1e293b 100%)",
+    minHeight: "100vh",
+    color: "#e2e8f0",
+    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+  },
+  nav: {
+    background: "rgba(15, 23, 42, 0.95)",
+    backdropFilter: "blur(20px)",
+    padding: "1rem 2rem",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderBottom: "1px solid rgba(59, 130, 246, 0.2)",
+    position: "sticky",
+    top: 0,
+    zIndex: 100,
+  },
+  navBrand: {
+    fontSize: "1.5rem",
+    fontWeight: 800,
+    background: "linear-gradient(135deg, #3b82f6, #8b5cf6)",
+    WebkitBackgroundClip: "text",
+    WebkitTextFillColor: "transparent",
+    backgroundClip: "text",
+  },
+  adminBtn: {
+    background: "linear-gradient(135deg, #3b82f6, #8b5cf6)",
+    color: "white",
+    border: "none",
+    padding: "0.75rem 1.5rem",
+    borderRadius: "12px",
+    fontWeight: 600,
+    cursor: "pointer",
+    fontSize: "0.875rem",
+    transition: "all 0.2s",
+  },
+  main: {
+    maxWidth: "1200px",
+    margin: "0 auto",
+    padding: "2rem",
+  },
+  contentGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "2rem",
+    marginTop: "2rem",
+  },
+  formCard: {
+    background: "rgba(30, 41, 59, 0.6)",
+    backdropFilter: "blur(20px)",
+    borderRadius: "20px",
+    padding: "2rem",
+    border: "1px solid rgba(71, 85, 105, 0.3)",
+  },
+  sectionTitle: {
+    fontSize: "1.75rem",
+    fontWeight: 800,
+    margin: "0 0 1rem 0",
+    background: "linear-gradient(135deg, #3b82f6, #8b5cf6)",
+    WebkitBackgroundClip: "text",
+    WebkitTextFillColor: "transparent",
+    backgroundClip: "text",
+  },
+  sportToggle: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "1rem",
+    marginBottom: "1.5rem",
+  },
+  sportBtn: {
+    padding: "1rem 1.25rem",
+    borderRadius: "16px",
+    border: "2px solid",
+    cursor: "pointer",
+    fontSize: "1rem",
+    transition: "all 0.2s",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: "0.25rem",
+  },
+  label: {
+    display: "block",
+    margin: "1rem 0 0.5rem 0",
+    fontWeight: 600,
+    color: "#94a3b8",
+    fontSize: "0.875rem",
+  },
+  input: {
+    width: "100%",
+    padding: "0.875rem 1rem",
+    border: "2px solid #334155",
+    borderRadius: "12px",
+    background: "rgba(15, 23, 42, 0.8)",
+    color: "#e2e8f0",
+    fontSize: "1rem",
+    transition: "all 0.2s",
+  },
+  slotBtn: {
+    padding: "0.875rem 1rem",
+    borderRadius: "12px",
+    border: "2px solid",
+    cursor: "pointer",
+    fontSize: "0.875rem",
+    fontWeight: 500,
+    transition: "all 0.2s",
+    textAlign: "left",
+  },
+  primaryBtn: {
+    padding: "1rem 1.5rem",
+    border: "none",
+    borderRadius: "12px",
+    fontWeight: 600,
+    cursor: "pointer",
+    fontSize: "0.875rem",
+    transition: "all 0.2s",
+  },
+  secondaryBtn: {
+    padding: "1rem 1.5rem",
+    border: "2px solid #3b82f6",
+    background: "transparent",
+    color: "#3b82f6",
+    borderRadius: "12px",
+    fontWeight: 600,
+    cursor: "pointer",
+    fontSize: "0.875rem",
+    transition: "all 0.2s",
+  },
+  overlay: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: "rgba(0,0,0,0.8)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1000,
+  },
+  modal: {
+    background: "#1e293b",
+    padding: "2rem",
+    borderRadius: "20px",
+    maxWidth: "320px",
+    width: "90%",
+    textAlign: "center",
+    border: "1px solid rgba(71, 85, 105, 0.3)",
+  },
+  closeBtn: {
+    marginTop: "1rem",
+    padding: "0.75rem 2rem",
+    background: "#3b82f6",
+    color: "white",
+    border: "none",
+    borderRadius: "10px",
+    cursor: "pointer",
+    fontWeight: 600,
+  },
+  errorText: {
+    color: "#ef4444",
+    background: "rgba(239, 68, 68, 0.1)",
+    padding: "0.75rem",
+    borderRadius: "8px",
+    margin: "1rem 0",
+    borderLeft: "4px solid #ef4444",
+  },
+  successBox: {
+    background: "rgba(34, 197, 94, 0.2)",
+    color: "#22c55e",
+    padding: "1rem",
+    borderRadius: "12px",
+    textAlign: "center",
+    fontWeight: 600,
+    margin: "1rem 0",
+    border: "2px solid rgba(34, 197, 94, 0.3)",
+  },
+  filterBtn: {
+    padding: "0.5rem 1rem",
+    border: "1px solid #334155",
+    background: "transparent",
+    color: "#64748b",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontSize: "0.75rem",
+    fontWeight: 500,
+  },
+  bookingRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "1rem",
+    padding: "1rem",
+    background: "rgba(15, 23, 42, 0.5)",
+    borderRadius: "12px",
+  },
+  hero: {
+    textAlign: "center",
+    padding: "3rem 2rem",
+    background: "linear-gradient(135deg, rgba(59,130,246,0.1) 0%, rgba(139,92,246,0.1) 100%)",
+    borderRadius: "24px",
+    marginBottom: "2rem",
+    border: "1px solid rgba(59, 130, 246, 0.2)",
+  },
+};
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
 const getTodayStr = () => new Date().toISOString().split("T")[0];
 
 const formatDate = (dateStr) => {
   if (!dateStr) return "";
-
   const d = new Date(dateStr + "T00:00:00");
-
   return d.toLocaleDateString("en-IN", {
     weekday: "short",
     day: "numeric",
@@ -112,37 +298,51 @@ const formatCurrency = (n) =>
 
 const sendWhatsApp = (booking) => {
   const sport = CONFIG.sports[booking.sport];
-
-  const message = encodeURIComponent(
-    `🏟 MJ Sports Arena Booking\n\n` +
+  const message = `🏟 MJ Sports Arena Booking\n\n` +
     `Name: ${booking.name}\n` +
     `Phone: ${booking.phone}\n` +
     `Sport: ${sport.name}\n` +
     `Date: ${booking.date}\n` +
     `Slot: ${booking.slot}\n\n` +
     `Amount: ₹${sport.pricePerHour}\n` +
-    `UPI: ${CONFIG.upiId}`
-  );
-
-  const url = `https://wa.me/${CONFIG.whatsappNumber}?text=${message}`;
-
- window.location.href = `https://wa.me/${CONFIG.whatsappNumber}?text=${msg}`;
+    `UPI: ${CONFIG.upiId}`;
+  
+  const encodedMessage = encodeURIComponent(message);
+  const url = `https://wa.me/${CONFIG.whatsappNumber.replace(/[^0-9]/g, '')}?text=${encodedMessage}`;
+  
+  console.log("📱 Opening WhatsApp:", url);
+  window.open(url, '_blank');
 };
-// ─── QR CODE MODAL ────────────────────────────────────────────────────────────
+
+// ─── COMPONENTS ───────────────────────────────────────────────────────────────
+function Hero() {
+  return (
+    <div style={styles.hero}>
+      <h1 style={{ fontSize: "3rem", fontWeight: 900, margin: "0 0 1rem", background: "linear-gradient(135deg, #3b82f6, #8b5cf6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+        MJ Sports Arena
+      </h1>
+      <p style={{ fontSize: "1.25rem", color: "#94a3b8", maxWidth: "600px", margin: "0 auto", lineHeight: 1.6 }}>
+        Book cricket & pickleball slots instantly. Real-time availability. Secure payments.
+      </p>
+    </div>
+  );
+}
+
 function QRModal({ sport, onClose }) {
   const [qrUrl, setQrUrl] = useState("");
   const price = CONFIG.sports[sport]?.pricePerHour || 0;
-  const upiLink = `upi://pay?pa=${CONFIG.upiId}&pn=${encodeURIComponent(CONFIG.arenaName)}&am=${price}&cu=INR&tn=${encodeURIComponent(CONFIG.sports[sport]?.name + " Booking")}`;
+  const upiLink = `upi://pay?pa=${encodeURIComponent(CONFIG.upiId)}&pn=${encodeURIComponent(CONFIG.arenaName)}&am=${price}&cu=INR&tn=${encodeURIComponent(CONFIG.sports[sport]?.name + " Booking")}`;
 
   useEffect(() => {
     QRCode.toDataURL(upiLink, { width: 220, margin: 2, color: { dark: "#000", light: "#fff" } })
-      .then(setQrUrl);
-  }, [sport]);
+      .then(setQrUrl)
+      .catch(console.error);
+  }, [sport, upiLink]);
 
   return (
     <div style={styles.overlay} onClick={onClose}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ margin: "0 0 4px", fontSize: 18, fontFamily: "'Syne', sans-serif" }}>Pay via UPI</h3>
+        <h3 style={{ margin: "0 0 4px", fontSize: 18, fontFamily: "'Inter', sans-serif" }}>Pay via UPI</h3>
         <p style={{ margin: "0 0 16px", color: "#94a3b8", fontSize: 13 }}>Scan to pay {formatCurrency(price)}</p>
         {qrUrl && <img src={qrUrl} alt="UPI QR" style={{ borderRadius: 12, width: 220 }} />}
         <p style={{ margin: "12px 0 0", color: "#64748b", fontSize: 12 }}>UPI ID: <strong style={{ color: "#e2e8f0" }}>{CONFIG.upiId}</strong></p>
@@ -152,7 +352,6 @@ function QRModal({ sport, onClose }) {
   );
 }
 
-// ─── BOOKING FORM ─────────────────────────────────────────────────────────────
 function BookingForm({ bookedSlots, onBook }) {
   const [sport, setSport] = useState("cricket");
   const [date, setDate] = useState(getTodayStr());
@@ -165,18 +364,15 @@ function BookingForm({ bookedSlots, onBook }) {
   const [error, setError] = useState("");
 
   const sportConfig = CONFIG.sports[sport];
-
   const bookedSlotsForDay = useMemo(() =>
-    bookedSlots
-      .filter((b) => b.sport === sport && b.date === date)
-      .map((b) => b.slot),
+    bookedSlots.filter((b) => b.sport === sport && b.date === date).map((b) => b.slot),
     [bookedSlots, sport, date]
   );
 
- const handleSubmit = async (e) => {
-  e.preventDefault(); // VERY IMPORTANT
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (loading) return;
 
-  if (loading) return; // stop double click {
     if (!slot || !name.trim() || !phone.trim()) {
       setError("Please fill all fields and select a slot.");
       return;
@@ -185,36 +381,39 @@ function BookingForm({ bookedSlots, onBook }) {
       setError("Enter a valid 10-digit phone number.");
       return;
     }
+
     setError("");
     setLoading(true);
+
     try {
       const booking = {
         sport,
         date,
-       slot: slot.trim().toLowerCase(),
+        slot: slot.trim(),
         name: name.trim(),
         phone: phone.trim(),
         amount: sportConfig.pricePerHour,
-        createdAt: new Date(),
+        createdAt: new Date().toISOString(),
       };
-      console.log("Saving booking:", booking);
 
-await addDoc(collection(db, "bookings"), booking);
-const snap = await getDocs(collection(db, "bookings"));
-setBookings(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-
-console.log("Booking saved successfully");
+      console.log("💾 Saving to Firebase:", booking);
+      await addDoc(collection(db, "bookings"), booking);
+      
+      console.log("✅ Booking saved successfully!");
+      
+      setName("");
+      setPhone("");
+      setSlot("");
       setSuccess(true);
+      
       setTimeout(() => {
+        sendWhatsApp(booking);
         setSuccess(false);
-        setSlot("");
-        setName("");
-        setPhone("");
-      }, 3000);
-      // WhatsApp confirmation
-     sendWhatsApp(booking);
+      }, 1000);
+
     } catch (e) {
-      setError("Booking failed. Check your internet connection.");
+      console.error("❌ Error:", e);
+      setError("Booking failed. Check internet connection.");
     } finally {
       setLoading(false);
     }
@@ -226,7 +425,6 @@ console.log("Booking saved successfully");
     <div style={styles.formCard}>
       <h2 style={{ ...styles.sectionTitle, marginBottom: 24 }}>Book Your Slot</h2>
 
-      {/* Sport Selection */}
       <div style={styles.sportToggle}>
         {Object.entries(CONFIG.sports).map(([key, s]) => (
           <button
@@ -246,7 +444,6 @@ console.log("Booking saved successfully");
         ))}
       </div>
 
-      {/* Date Picker */}
       <label style={styles.label}>Select Date</label>
       <input
         type="date"
@@ -256,50 +453,33 @@ console.log("Booking saved successfully");
         style={styles.input}
       />
 
-      {/* Slot Grid */}
-     {sportConfig.slots.map((s) => {
-  console.log("Checking slot:", s, bookedSlots); // DEBUG
+      <div style={{ maxHeight: "300px", overflowY: "auto", marginBottom: "1rem" }}>
+        {sportConfig.slots.map((s) => {
+          const booked = bookedSlotsForDay.includes(s);
+          const selected = slot === s;
 
-  const booked = bookedSlots.find((b) => {
-  return (
-    b.date === date &&
-    b.slot.toLowerCase() === s.toLowerCase() &&
-    b.sport === sport
-  );
-});
+          return (
+            <button
+              key={s}
+              disabled={booked}
+              onClick={() => !booked && setSlot(s)}
+              style={{
+                ...styles.slotBtn,
+                background: booked ? "#1e293b" : selected ? sportConfig.color : "transparent",
+                color: booked ? "#475569" : selected ? "#000" : "#cbd5e1",
+                border: `1.5px solid ${booked ? "#1e293b" : selected ? sportConfig.color : "#334155"}`,
+                cursor: booked ? "not-allowed" : "pointer",
+                textDecoration: booked ? "line-through" : "none",
+                marginBottom: 6,
+                width: "100%"
+              }}
+            >
+              {s}
+            </button>
+          );
+        })}
+      </div>
 
-  const selected = slot === s;
-
-  return (
-    <button
-      key={s}
-      disabled={!!booked}
-      onClick={() => !booked && setSlot(s)}
-      style={{
-        ...styles.slotBtn,
-        background: booked
-          ? "#1e293b"
-          : selected
-          ? sportConfig.color
-          : "transparent",
-        color: booked
-          ? "#475569"
-          : selected
-          ? "#000"
-          : "#cbd5e1",
-        border: `1.5px solid ${
-          booked ? "#1e293b" : selected ? sportConfig.color : "#334155"
-        }`,
-        cursor: booked ? "not-allowed" : "pointer",
-        textDecoration: booked ? "line-through" : "none",
-      }}
-    >
-      {s}
-    </button>
-  );
-})}
-
-      {/* User Details */}
       <label style={styles.label}>Your Name</label>
       <input
         type="text"
@@ -308,6 +488,7 @@ console.log("Booking saved successfully");
         onChange={(e) => setName(e.target.value)}
         style={styles.input}
       />
+      
       <label style={styles.label}>Phone Number</label>
       <input
         type="tel"
@@ -319,18 +500,16 @@ console.log("Booking saved successfully");
       />
 
       {error && <p style={styles.errorText}>{error}</p>}
-
       {success && (
         <div style={styles.successBox}>
-          ✅ Booking confirmed! WhatsApp message opening...
+          ✅ Booking confirmed! WhatsApp opening...
         </div>
       )}
 
-      {/* Actions */}
       <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
         <button
           onClick={handleSubmit}
-          disabled={loading}
+          disabled={loading || !slot || !name || !phone}
           style={{ ...styles.primaryBtn, background: sportConfig.color, flex: 2 }}
         >
           {loading ? "Booking..." : `Confirm Booking — ${formatCurrency(sportConfig.pricePerHour)}`}
@@ -338,6 +517,7 @@ console.log("Booking saved successfully");
         <button
           onClick={() => setShowQR(true)}
           style={{ ...styles.secondaryBtn, flex: 1 }}
+          disabled={!slot}
         >
           📱 Pay QR
         </button>
@@ -348,16 +528,13 @@ console.log("Booking saved successfully");
   );
 }
 
-// ─── TODAY'S AVAILABILITY WIDGET ──────────────────────────────────────────────
 function TodayView({ bookedSlots }) {
   const [filter, setFilter] = useState("all");
   const today = getTodayStr();
-
   const todayBookings = useMemo(() =>
     bookedSlots.filter((b) => b.date === today),
     [bookedSlots, today]
   );
-
   const displayed = filter === "all" ? todayBookings : todayBookings.filter((b) => b.sport === filter);
 
   return (
@@ -373,6 +550,7 @@ function TodayView({ bookedSlots }) {
                 ...styles.filterBtn,
                 background: filter === f ? "#3b82f6" : "transparent",
                 color: filter === f ? "#fff" : "#64748b",
+                borderColor: filter === f ? "#3b82f6" : "#334155",
               }}
             >
               {f === "all" ? "All" : CONFIG.sports[f]?.emoji + " " + CONFIG.sports[f]?.name}
@@ -408,194 +586,103 @@ function TodayView({ bookedSlots }) {
   );
 }
 
-// ─── ADMIN DASHBOARD ──────────────────────────────────────────────────────────
-function AdminDashboard({ bookings, onCancel, onLogout }) {
-  const [tab, setTab] = useState("all");
-  const [filterSport, setFilterSport] = useState("all");
-  const [cancelConfirm, setCancelConfirm] = useState(null);
-
-  const today = getTodayStr();
-  const startOfWeek = new Date();
-  startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-  const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-
-  const filtered = useMemo(() => {
-    let base = bookings;
-    if (filterSport !== "all") base = base.filter((b) => b.sport === filterSport);
-    if (tab === "today") base = base.filter((b) => b.date === today);
-    if (tab === "upcoming") base = base.filter((b) => b.date >= today);
-    return [...base].sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-  }, [bookings, tab, filterSport, today]);
-
-  const revenue = {
-    daily: bookings.filter((b) => b.date === today).reduce((s, b) => s + b.amount, 0),
-    weekly: bookings.filter((b) => new Date(b.date) >= startOfWeek).reduce((s, b) => s + b.amount, 0),
-    monthly: bookings.filter((b) => new Date(b.date) >= startOfMonth).reduce((s, b) => s + b.amount, 0),
-    total: bookings.reduce((s, b) => s + b.amount, 0),
-  };
-
-  const handleCancel = async (id) => {
-    await deleteDoc(doc(db, "bookings", id));
-    onCancel(id);
-    setCancelConfirm(null);
-  };
-
-  return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 16px" }}>
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
-        <div>
-          <h1 style={{ ...styles.heroTitle, fontSize: 26, marginBottom: 4 }}>Admin Dashboard</h1>
-          <p style={{ color: "#64748b", margin: 0 }}>{CONFIG.arenaName}</p>
-        </div>
-        <button onClick={onLogout} style={styles.logoutBtn}>Logout</button>
-      </div>
-
-      {/* Revenue Cards */}
-      <div style={styles.revenueGrid}>
-        {[
-          { label: "Today's Revenue", value: revenue.daily, color: "#22c55e" },
-          { label: "This Week", value: revenue.weekly, color: "#3b82f6" },
-          { label: "This Month", value: revenue.monthly, color: "#a855f7" },
-          { label: "All Time", value: revenue.total, color: "#f59e0b" },
-        ].map((r) => (
-          <div key={r.label} style={styles.revenueCard}>
-            <span style={{ color: "#64748b", fontSize: 12, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>{r.label}</span>
-            <span style={{ color: r.color, fontSize: 24, fontWeight: 700, fontFamily: "'Syne', sans-serif", display: "block", marginTop: 6 }}>
-              {formatCurrency(r.value)}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {/* Summary Count */}
-      <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-        <div style={styles.countBadge}>📋 Total: {bookings.length}</div>
-        <div style={styles.countBadge}>🏏 Cricket: {bookings.filter((b) => b.sport === "cricket").length}</div>
-        <div style={styles.countBadge}>🥒 Pickleball: {bookings.filter((b) => b.sport === "pickleball").length}</div>
-        <div style={styles.countBadge}>📅 Today: {bookings.filter((b) => b.date === today).length}</div>
-      </div>
-
-      {/* Filters */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        {[["all", "All Bookings"], ["today", "Today"], ["upcoming", "Upcoming"]].map(([t, label]) => (
-          <button key={t} onClick={() => setTab(t)} style={{ ...styles.filterBtn, background: tab === t ? "#3b82f6" : "#1e293b", color: tab === t ? "#fff" : "#94a3b8" }}>
-            {label}
-          </button>
-        ))}
-        <div style={{ flex: 1 }} />
-        {["all", "cricket", "pickleball"].map((f) => (
-          <button key={f} onClick={() => setFilterSport(f)} style={{ ...styles.filterBtn, background: filterSport === f ? "#334155" : "transparent", color: filterSport === f ? "#e2e8f0" : "#64748b" }}>
-            {f === "all" ? "All Sports" : CONFIG.sports[f]?.emoji + " " + CONFIG.sports[f]?.name}
-          </button>
-        ))}
-      </div>
-
-      {/* Bookings Table */}
-      <div style={styles.tableWrap}>
-        {filtered.length === 0 ? (
-          <p style={{ color: "#475569", textAlign: "center", padding: "32px 0" }}>No bookings found</p>
-        ) : (
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                {["#", "Sport", "Date", "Slot", "Customer", "Phone", "Amount", "Action"].map((h) => (
-                  <th key={h} style={styles.th}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((b, i) => {
-                const s = CONFIG.sports[b.sport];
-                return (
-                  <tr key={b.id} style={{ borderBottom: "1px solid #1e293b" }}>
-                    <td style={styles.td}>{i + 1}</td>
-                    <td style={styles.td}>
-                      <span style={{ color: s?.color }}>{s?.emoji} {s?.name}</span>
-                    </td>
-                    <td style={styles.td}>{formatDate(b.date)}</td>
-                    <td style={styles.td}>{b.slot}</td>
-                    <td style={styles.td}>{b.name}</td>
-                    <td style={styles.td}>{b.phone}</td>
-                    <td style={{ ...styles.td, color: "#22c55e", fontWeight: 600 }}>{formatCurrency(b.amount)}</td>
-                    <td style={styles.td}>
-                      {cancelConfirm === b.id ? (
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <button onClick={() => handleCancel(b.id)} style={styles.dangerBtn}>Yes</button>
-                          <button onClick={() => setCancelConfirm(null)} style={styles.ghostBtn}>No</button>
-                        </div>
-                      ) : (
-                        <button onClick={() => setCancelConfirm(b.id)} style={styles.dangerBtn}>Cancel</button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── ADMIN LOGIN ──────────────────────────────────────────────────────────────
 function AdminLogin({ onLogin }) {
-  const [pw, setPw] = useState("");
-  const [err, setErr] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
 
-  const handleLogin = () => {
-    if (pw === CONFIG.adminPassword) {
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (password === CONFIG.adminPassword) {
       onLogin();
     } else {
-      setErr("Incorrect password");
-      setTimeout(() => setErr(""), 2000);
+      setError("Wrong password!");
     }
   };
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#020817" }}>
-      <div style={styles.loginCard}>
-        <div style={{ fontSize: 40, marginBottom: 16, textAlign: "center" }}>🔐</div>
-        <h2 style={{ textAlign: "center", fontFamily: "'Syne', sans-serif", color: "#e2e8f0", marginBottom: 24 }}>Admin Login</h2>
-        <input
-          type="password"
-          placeholder="Enter admin password"
-          value={pw}
-          onChange={(e) => setPw(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-          style={styles.input}
-        />
-        {err && <p style={styles.errorText}>{err}</p>}
-        <button onClick={handleLogin} style={{ ...styles.primaryBtn, width: "100%", marginTop: 12 }}>
-          Login
-        </button>
+    <div style={{ ...styles.root, display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
+      <div style={styles.formCard}>
+        <h2 style={styles.sectionTitle}>Admin Login</h2>
+        <form onSubmit={handleSubmit}>
+          <label style={styles.label}>Password</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            style={styles.input}
+            placeholder="Enter admin password"
+          />
+          {error && <p style={styles.errorText}>{error}</p>}
+          <button type="submit" style={{ ...styles.primaryBtn, background: "#3b82f6", width: "100%", marginTop: "1rem" }}>
+            Login
+          </button>
+        </form>
       </div>
     </div>
   );
 }
 
-// ─── LANDING HERO ─────────────────────────────────────────────────────────────
-function Hero() {
+function AdminDashboard({ bookings, onCancel, onLogout }) {
+  const today = getTodayStr();
+  const todayBookings = bookings.filter(b => b.date === today);
+
   return (
-    <div style={styles.hero}>
-      <div style={styles.heroGlow} />
-      <p style={styles.heroTag}>⚡ Premium Sports Facility</p>
-      <h1 style={styles.heroTitle}>
-        MJ <span style={{ color: "#22c55e" }}>Sports</span> Arena
-      </h1>
-      <p style={styles.heroSub}>
-        Book cricket grounds & pickleball courts instantly. No calls needed.
-      </p>
-      <div style={styles.sportCards}>
-        {Object.values(CONFIG.sports).map((s) => (
-          <div key={s.name} style={{ ...styles.sportCard, borderColor: s.color + "44" }}>
-            <span style={{ fontSize: 32 }}>{s.emoji}</span>
-            <span style={{ fontWeight: 700, color: "#e2e8f0", fontSize: 16 }}>{s.name}</span>
-            <span style={{ color: s.color, fontSize: 14, fontWeight: 600 }}>{formatCurrency(s.pricePerHour)}/hr</span>
-            <span style={{ color: "#64748b", fontSize: 12 }}>{s.description}</span>
-          </div>
-        ))}
+    <div style={{ background: "#020817", minHeight: "100vh", color: "#e2e8f0" }}>
+      <div style={styles.nav}>
+        <span style={styles.navBrand}>Admin Dashboard</span>
+        <button onClick={onLogout} style={{ ...styles.adminBtn, background: "#ef4444" }}>Logout</button>
+      </div>
+      
+      <div style={styles.main}>
+        <div style={styles.formCard}>
+          <h2 style={styles.sectionTitle}>Today's Bookings ({todayBookings.length})</h2>
+          {todayBookings.length === 0 ? (
+            <p style={{ color: "#475569", textAlign: "center", padding: "2rem" }}>No bookings today</p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {todayBookings.map((booking) => {
+                const sport = CONFIG.sports[booking.sport];
+                return (
+                  <div key={booking.id} style={{
+                    ...styles.bookingRow,
+                    borderLeft: `4px solid ${sport.color}`,
+                    padding: "1.25rem",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "1rem", flex: 1 }}>
+                      <span style={{ fontSize: 24 }}>{sport.emoji}</span>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: "1.1rem" }}>{booking.slot}</div>
+                        <div style={{ color: "#94a3b8" }}>{booking.name} • {booking.phone}</div>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontWeight: 700, color: sport.color }}>{formatCurrency(booking.amount)}</div>
+                      <button
+                        onClick={() => {
+                          if (confirm("Cancel this booking?")) {
+                            onCancel(booking.id);
+                          }
+                        }}
+                        style={{
+                          marginTop: "0.5rem",
+                          padding: "0.5rem 1rem",
+                          background: "#ef4444",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "8px",
+                          cursor: "pointer",
+                          fontSize: "0.875rem",
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -604,530 +691,121 @@ function Hero() {
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [bookings, setBookings] = useState([]);
-  const [view, setView] = useState("home"); // home | admin | adminLogin
+  const [view, setView] = useState("home");
   const [adminLoggedIn, setAdminLoggedIn] = useState(false);
 
- useEffect(() => {
-  const fetchBookings = async () => {
-    try {
-      const snap = await getDocs(collection(db, "bookings"));
-      const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-
-      console.log("Fetched bookings:", data);
-
+  useEffect(() => {
+    console.log("🔥 Connecting to Firebase real-time...");
+    
+    const q = query(collection(db, "bookings"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      console.log("📊 Bookings updated:", data.length);
       setBookings(data);
-    } catch (err) {
-      console.error("Error fetching bookings:", err);
-    }
-  };
+    }, (error) => {
+      console.error("❌ Firebase error:", error);
+    });
 
-  fetchBookings();
-}, []);
+    return () => {
+      console.log("🔌 Firebase listener removed");
+      unsubscribe();
+    };
+  }, []);
 
-  const handleBook = (booking) => {
-    setBookings((prev) => [{ ...booking }, ...prev]);
-  };
-
-  const handleCancel = (id) => {
-    setBookings((prev) => prev.filter((b) => b.id !== id));
-  };
+  const handleCancel = useCallback((id) => {
+    deleteDoc(doc(db, "bookings", id));
+  }, []);
 
   if (view === "adminLogin" && !adminLoggedIn) {
-    return (
-      <AdminLogin onLogin={() => { setAdminLoggedIn(true); setView("admin"); }} />
-    );
+    return <AdminLogin onLogin={() => { setAdminLoggedIn(true); setView("admin"); }} />;
   }
 
   if (view === "admin" && adminLoggedIn) {
     return (
-      <div style={{ background: "#020817", minHeight: "100vh", color: "#e2e8f0" }}>
-        <AdminDashboard
-          bookings={bookings}
-          onCancel={handleCancel}
-          onLogout={() => { setAdminLoggedIn(false); setView("home"); }}
-        />
-      </div>
+      <AdminDashboard 
+        bookings={bookings} 
+        onCancel={handleCancel} 
+        onLogout={() => { 
+          setAdminLoggedIn(false); 
+          setView("home"); 
+        }} 
+      />
     );
   }
 
   return (
     <div style={styles.root}>
-      {/* Navbar */}
       <nav style={styles.nav}>
         <span style={styles.navBrand}>🏟️ MJ Sports Arena</span>
-        <button
-          onClick={() => setView("adminLogin")}
-          style={styles.adminBtn}
-        >
-          Admin →
-        </button>
+        <button onClick={() => setView("adminLogin")} style={styles.adminBtn}>Admin →</button>
       </nav>
 
       <main style={styles.main}>
         <Hero />
         <div style={styles.contentGrid}>
-          <div>
-            <BookingForm bookedSlots={bookings} onBook={handleBook} />
-          </div>
-          <div>
-            <TodayView bookedSlots={bookings} />
-          </div>
+          <div><BookingForm bookedSlots={bookings} /></div>
+          <div><TodayView bookedSlots={bookings} /></div>
         </div>
       </main>
+
       {/* CONTACT SECTION */}
-<div style={{
-  marginTop: "60px",
-  padding: "40px 20px",
-  background: "#0f172a",
-  color: "white"
-}}>
-
-  <div style={{
-    maxWidth: "1100px",
-    margin: "auto",
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-    gap: "30px",
-    alignItems: "center"
-  }}>
-
-    {/* LEFT SIDE - DETAILS */}
-    <div>
-      <h2 style={{ fontSize: "26px", marginBottom: "15px" }}>
-        📞 Contact Us
-      </h2>
-
-      <p style={{ margin: "8px 0", fontSize: "16px" }}>
-        <strong>MJ Sports Arena</strong>
-      </p>
-
-      <p style={{ margin: "8px 0" }}>
-        📍 Sunny Enclave, Kharar, Punjab
-      </p>
-
-      <p style={{ margin: "8px 0" }}>
-        📞 +91 9041528165
-      </p>
-
-      <p style={{ margin: "8px 0" }}>
-        📧 mjsportsarena@gmail.com
-      </p>
-
-      {/* BUTTONS */}
-      <div style={{ marginTop: "20px", display: "flex", gap: "10px", flexWrap: "wrap" }}>
-
-        {/* CALL BUTTON */}
-        <a href="tel:+919876543210">
-          <button style={{
-            padding: "10px 18px",
-            background: "#22c55e",
-            border: "none",
-            borderRadius: "8px",
-            cursor: "pointer",
-            fontWeight: "600"
-          }}>
-            📞 Call Now
-          </button>
-        </a>
-
-        {/* WHATSAPP BUTTON */}
-        <a href="https://wa.me/919876543210" target="_blank">
-          <button style={{
-            padding: "10px 18px",
-            background: "#25D366",
-            border: "none",
-            borderRadius: "8px",
-            cursor: "pointer",
-            fontWeight: "600"
-          }}>
-            💬 WhatsApp
-          </button>
-        </a>
-
-        {/* GOOGLE REVIEW */}
-        <a href="https://www.google.com/maps/place/MJ+SPORTS+ARENA" target="_blank">
-          <button style={{
-            padding: "10px 18px",
-            background: "#3b82f6",
-            border: "none",
-            borderRadius: "8px",
-            cursor: "pointer",
-            fontWeight: "600",
-            color: "white"
-          }}>
-            ⭐ Review Us
-          </button>
-        </a>
-
+      <div style={{
+        marginTop: "60px",
+        padding: "40px 20px",
+        background: "#0f172a",
+        color: "white"
+      }}>
+        <div style={{
+          maxWidth: "1100px",
+          margin: "auto",
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+          gap: "30px",
+          alignItems: "center"
+        }}>
+          <div>
+            <h2 style={{ fontSize: "26px", marginBottom: "15px" }}>📞 Contact Us</h2>
+            <p style={{ margin: "8px 0", fontSize: "16px" }}><strong>MJ Sports Arena</strong></p>
+            <p style={{ margin: "8px 0" }}>📍 Sunny Enclave, Kharar, Punjab</p>
+            <p style={{ margin: "8px 0" }}>📞 +91 9041528165</p>
+            <p style={{ margin: "8px 0" }}>📧 mjsportsarena@gmail.com</p>
+            <div style={{ marginTop: "20px", display: "flex", gap: "10px", flexWrap: "wrap" }}>
+              <a href="tel:+919041528165">
+                <button style={{
+                  padding: "10px 18px",
+                  background: "#22c55e",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontWeight: "600"
+                }}>📞 Call Now</button>
+              </a>
+              <a href={`https://wa.me/${CONFIG.whatsappNumber}`} target="_blank" rel="noopener noreferrer">
+                <button style={{
+                  padding: "10px 18px",
+                  background: "#25D366",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  fontWeight: "600"
+                }}>💬 WhatsApp</button>
+              </a>
+            </div>
+          </div>
+          <div>
+            <iframe
+              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3475.4891742999997!2d76.63523431525879!3d30.804999681849997!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMzDCsDUwJzE3LjkiTiA3NmszOSeaCcyOS4zIlE!5e0!3m2!1sen!2sin!4v1699999999999"
+              width="100%"
+              height="300"
+              style={{ border: 0, borderRadius: "12px" }}
+              allowFullScreen=""
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+              title="MJ Sports Arena Location"
+            />
+          </div>
+        </div>
       </div>
-    </div>
-
-    {/* RIGHT SIDE - MAP */}
-    <div>
-      <iframe
-        src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3428.6700605626625!2d76.66673457537398!3d30.755768074573073!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x390ff182a69eb9ad%3A0xe01fd32b21f88d78!2sMJ%20SPORTS%20ARENA!5e0!3m2!1sen!2sin!4v1776504223823!5m2!1sen!2sin"
-        width="100%"
-        height="300"
-        style={{ border: 0, borderRadius: "12px" }}
-        loading="lazy"
-      ></iframe>
-    </div>
-
-  </div>
-</div>
-
-      <footer style={styles.footer}>
-        <p style={{ margin: 0, color: "#334155" }}>
-          © {new Date().getFullYear()} {CONFIG.arenaName} — Built with ❤️
-        </p>
-      </footer>
     </div>
   );
 }
-
-// ─── STYLES ───────────────────────────────────────────────────────────────────
-const styles = {
-  root: {
-    background: "#020817",
-    minHeight: "100vh",
-    color: "#e2e8f0",
-    fontFamily: "'DM Sans', sans-serif",
-  },
-  nav: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "14px 24px",
-    borderBottom: "1px solid #0f172a",
-    backdropFilter: "blur(12px)",
-    position: "sticky",
-    top: 0,
-    zIndex: 50,
-    background: "rgba(2,8,23,0.92)",
-  },
-  navBrand: {
-    fontFamily: "'Syne', sans-serif",
-    fontWeight: 700,
-    fontSize: 18,
-    color: "#e2e8f0",
-    letterSpacing: "-0.5px",
-  },
-  adminBtn: {
-    background: "transparent",
-    border: "1px solid #334155",
-    color: "#94a3b8",
-    padding: "6px 14px",
-    borderRadius: 8,
-    cursor: "pointer",
-    fontSize: 13,
-    fontFamily: "'DM Sans', sans-serif",
-  },
-  main: {
-    maxWidth: 1100,
-    margin: "0 auto",
-    padding: "0 16px 60px",
-  },
-  hero: {
-    textAlign: "center",
-    padding: "64px 16px 48px",
-    position: "relative",
-    overflow: "hidden",
-  },
-  heroGlow: {
-    position: "absolute",
-    top: "20%",
-    left: "50%",
-    transform: "translateX(-50%)",
-    width: 500,
-    height: 300,
-    background: "radial-gradient(ellipse, rgba(34,197,94,0.08) 0%, transparent 70%)",
-    pointerEvents: "none",
-  },
-  heroTag: {
-    color: "#22c55e",
-    fontSize: 13,
-    fontWeight: 600,
-    letterSpacing: 2,
-    textTransform: "uppercase",
-    margin: "0 0 16px",
-  },
-  heroTitle: {
-    fontFamily: "'Syne', sans-serif",
-    fontSize: "clamp(32px, 6vw, 60px)",
-    fontWeight: 800,
-    color: "#f8fafc",
-    margin: "0 0 16px",
-    letterSpacing: "-2px",
-    lineHeight: 1.1,
-  },
-  heroSub: {
-    color: "#64748b",
-    fontSize: 17,
-    margin: "0 0 40px",
-    maxWidth: 480,
-    marginLeft: "auto",
-    marginRight: "auto",
-  },
-  sportCards: {
-    display: "flex",
-    gap: 16,
-    justifyContent: "center",
-    flexWrap: "wrap",
-  },
-  sportCard: {
-    background: "#0f172a",
-    border: "1px solid",
-    borderRadius: 16,
-    padding: "20px 28px",
-    display: "flex",
-    flexDirection: "column",
-    gap: 6,
-    alignItems: "center",
-    minWidth: 180,
-  },
-  contentGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-    gap: 20,
-    marginTop: 8,
-  },
-  formCard: {
-    background: "#0a0f1e",
-    border: "1px solid #1e293b",
-    borderRadius: 20,
-    padding: "24px",
-  },
-  sectionTitle: {
-    fontFamily: "'Syne', sans-serif",
-    fontSize: 20,
-    fontWeight: 700,
-    color: "#f1f5f9",
-    margin: 0,
-  },
-  sportToggle: {
-    display: "flex",
-    gap: 10,
-    marginBottom: 20,
-    flexWrap: "wrap",
-  },
-  sportBtn: {
-    flex: 1,
-    minWidth: 120,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 4,
-    padding: "12px",
-    borderRadius: 12,
-    cursor: "pointer",
-    fontFamily: "'DM Sans', sans-serif",
-    transition: "all 0.15s",
-  },
-  label: {
-    display: "block",
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: 600,
-    letterSpacing: 1,
-    textTransform: "uppercase",
-    marginBottom: 8,
-    marginTop: 16,
-  },
-  input: {
-    width: "100%",
-    background: "#0f172a",
-    border: "1px solid #1e293b",
-    borderRadius: 10,
-    padding: "10px 14px",
-    color: "#e2e8f0",
-    fontSize: 15,
-    fontFamily: "'DM Sans', sans-serif",
-    boxSizing: "border-box",
-    outline: "none",
-  },
-  slotGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))",
-    gap: 8,
-    marginBottom: 8,
-  },
-  slotBtn: {
-    padding: "8px 4px",
-    borderRadius: 8,
-    fontSize: 12,
-    fontWeight: 600,
-    fontFamily: "'DM Sans', sans-serif",
-    textAlign: "center",
-    transition: "all 0.12s",
-  },
-  primaryBtn: {
-    padding: "12px 20px",
-    borderRadius: 12,
-    border: "none",
-    color: "#000",
-    fontWeight: 700,
-    fontSize: 15,
-    cursor: "pointer",
-    fontFamily: "'DM Sans', sans-serif",
-    letterSpacing: "-0.3px",
-  },
-  secondaryBtn: {
-    padding: "12px 16px",
-    borderRadius: 12,
-    border: "1px solid #334155",
-    background: "transparent",
-    color: "#94a3b8",
-    fontWeight: 600,
-    fontSize: 14,
-    cursor: "pointer",
-    fontFamily: "'DM Sans', sans-serif",
-  },
-  errorText: { color: "#f87171", fontSize: 13, margin: "8px 0 0" },
-  successBox: {
-    background: "#052e16",
-    border: "1px solid #166534",
-    borderRadius: 10,
-    padding: "12px 16px",
-    color: "#4ade80",
-    fontSize: 14,
-    marginTop: 12,
-  },
-  bookingRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    background: "#0f172a",
-    borderRadius: 10,
-    padding: "10px 14px",
-    paddingLeft: 12,
-  },
-  filterBtn: {
-    padding: "6px 12px",
-    borderRadius: 8,
-    border: "none",
-    fontSize: 13,
-    cursor: "pointer",
-    fontFamily: "'DM Sans', sans-serif",
-    fontWeight: 500,
-  },
-  overlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,0.8)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 999,
-  },
-  modal: {
-    background: "#0f172a",
-    border: "1px solid #1e293b",
-    borderRadius: 20,
-    padding: 28,
-    textAlign: "center",
-    maxWidth: 300,
-    width: "90%",
-  },
-  closeBtn: {
-    marginTop: 16,
-    padding: "8px 24px",
-    borderRadius: 8,
-    border: "1px solid #334155",
-    background: "transparent",
-    color: "#94a3b8",
-    cursor: "pointer",
-    fontSize: 14,
-    fontFamily: "'DM Sans', sans-serif",
-  },
-  revenueGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-    gap: 12,
-    marginBottom: 20,
-  },
-  revenueCard: {
-    background: "#0a0f1e",
-    border: "1px solid #1e293b",
-    borderRadius: 14,
-    padding: "16px 18px",
-  },
-  countBadge: {
-    background: "#0f172a",
-    border: "1px solid #1e293b",
-    borderRadius: 8,
-    padding: "6px 14px",
-    color: "#94a3b8",
-    fontSize: 13,
-  },
-  tableWrap: {
-    background: "#0a0f1e",
-    border: "1px solid #1e293b",
-    borderRadius: 16,
-    overflow: "auto",
-  },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-    minWidth: 700,
-  },
-  th: {
-    padding: "12px 14px",
-    textAlign: "left",
-    color: "#475569",
-    fontSize: 11,
-    fontWeight: 700,
-    letterSpacing: 1,
-    textTransform: "uppercase",
-    borderBottom: "1px solid #1e293b",
-    background: "#0a0f1e",
-  },
-  td: {
-    padding: "12px 14px",
-    color: "#cbd5e1",
-    fontSize: 14,
-    verticalAlign: "middle",
-  },
-  dangerBtn: {
-    padding: "5px 12px",
-    borderRadius: 7,
-    border: "1px solid #7f1d1d",
-    background: "transparent",
-    color: "#f87171",
-    cursor: "pointer",
-    fontSize: 12,
-    fontFamily: "'DM Sans', sans-serif",
-  },
-  ghostBtn: {
-    padding: "5px 12px",
-    borderRadius: 7,
-    border: "1px solid #334155",
-    background: "transparent",
-    color: "#94a3b8",
-    cursor: "pointer",
-    fontSize: 12,
-    fontFamily: "'DM Sans', sans-serif",
-  },
-  logoutBtn: {
-    padding: "8px 16px",
-    borderRadius: 8,
-    border: "1px solid #334155",
-    background: "transparent",
-    color: "#94a3b8",
-    cursor: "pointer",
-    fontSize: 13,
-    fontFamily: "'DM Sans', sans-serif",
-  },
-  loginCard: {
-    background: "#0a0f1e",
-    border: "1px solid #1e293b",
-    borderRadius: 20,
-    padding: "36px 32px",
-    width: "100%",
-    maxWidth: 340,
-  },
-  footer: {
-    borderTop: "1px solid #0f172a",
-    padding: "20px 24px",
-    textAlign: "center",
-  },
-};
