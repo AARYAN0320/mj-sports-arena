@@ -295,23 +295,24 @@ const formatDate = (dateStr) => {
 
 const formatCurrency = (n) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
-
-const sendWhatsApp = (booking) => {
+// 🔥 NEW FIXED WhatsApp function
+const sendWhatsAppFixed = (booking) => {
   const sport = CONFIG.sports[booking.sport];
-  const message = `🏟 MJ Sports Arena Booking\n\n` +
-    `Name: ${booking.name}\n` +
-    `Phone: ${booking.phone}\n` +
-    `Sport: ${sport.name}\n` +
-    `Date: ${booking.date}\n` +
-    `Slot: ${booking.slot}\n\n` +
-    `Amount: ₹${sport.pricePerHour}\n` +
-    `UPI: ${CONFIG.upiId}`;
+  const cleanWhatsApp = CONFIG.whatsappNumber.replace(/[^0-9]/g, ''); // Remove +,-,spaces
   
-  const encodedMessage = encodeURIComponent(message);
-  const url = `https://wa.me/${CONFIG.whatsappNumber.replace(/[^0-9]/g, '')}?text=${encodedMessage}`;
+  const message = `🏟️ MJ Sports Arena - BOOKING CONFIRMED!%0A%0A` +
+    `👤 ${booking.name}%0A` +
+    `📱 ${booking.phone}%0A` +
+    `⚽ ${sport.emoji} ${sport.name}%0A` +
+    `📅 ${booking.date}%0A` +
+    `⏰ ${booking.slot}%0A%0A` +
+    `💰 ${formatCurrency(sport.pricePerHour)}%0A` +
+    `📍 Kharar, Punjab`;
+
+  const url = `https://wa.me/${cleanWhatsApp}?text=${message}`;
   
-  console.log("📱 Opening WhatsApp:", url);
-  window.open(url, '_blank');
+  console.log("📱 WhatsApp opening:", url);
+  window.open(url, '_blank', 'noopener,noreferrer');
 };
 
 // ─── COMPONENTS ───────────────────────────────────────────────────────────────
@@ -352,7 +353,7 @@ function QRModal({ sport, onClose }) {
   );
 }
 
-function BookingForm({ bookedSlots, onBook }) {
+function BookingForm({ bookedSlots, isFirebaseReady = false }) {
   const [sport, setSport] = useState("cricket");
   const [date, setDate] = useState(getTodayStr());
   const [slot, setSlot] = useState("");
@@ -364,10 +365,17 @@ function BookingForm({ bookedSlots, onBook }) {
   const [error, setError] = useState("");
 
   const sportConfig = CONFIG.sports[sport];
-  const bookedSlotsForDay = useMemo(() =>
-    bookedSlots.filter((b) => b.sport === sport && b.date === date).map((b) => b.slot),
-    [bookedSlots, sport, date]
-  );
+  const bookedSlotsForDay = useMemo(() => {
+  if (!isFirebaseReady) return [];
+  
+  return bookedSlots
+    .filter((b) => 
+      b.sport === sport && 
+      b.date === date && 
+      typeof b.slot === 'string'
+    )
+    .map((b) => b.slot.trim());
+}, [bookedSlots, sport, date, isFirebaseReady]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -405,11 +413,10 @@ function BookingForm({ bookedSlots, onBook }) {
       setPhone("");
       setSlot("");
       setSuccess(true);
-      
       setTimeout(() => {
-        sendWhatsApp(booking);
-        setSuccess(false);
-      }, 1000);
+  sendWhatsAppFixed(booking);  // 🔥 Use fixed function
+  setSuccess(false);
+}, 800); // Slightly faster
 
     } catch (e) {
       console.error("❌ Error:", e);
@@ -454,15 +461,40 @@ function BookingForm({ bookedSlots, onBook }) {
       />
 
       <div style={{ maxHeight: "300px", overflowY: "auto", marginBottom: "1rem" }}>
-        {sportConfig.slots.map((s) => {
-          const booked = bookedSlotsForDay.includes(s);
+       {sportConfig.slots.map((s) => {
+  const cleanSlot = s.trim();
+  const booked = bookedSlotsForDay.includes(cleanSlot);
+  const selected = slot === cleanSlot;
           const selected = slot === s;
-
+// 🔥 ADD THIS BEFORE "return (...)"
+if (!isFirebaseReady) {
+  return (
+    <div style={styles.formCard}>
+      <div style={{ 
+        textAlign: "center", 
+        padding: "3rem", 
+        color: "#94a3b8",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: "1rem"
+      }}>
+        <div style={{ fontSize: "2.5rem" }}>⚡</div>
+        <div style={{ fontSize: "1.1rem", fontWeight: "600" }}>
+          Loading available slots...
+        </div>
+        <div style={{ fontSize: "0.9rem", opacity: 0.7 }}>
+          Connecting to Firebase (2 seconds)
+        </div>
+      </div>
+    </div>
+  );
+}
           return (
             <button
               key={s}
               disabled={booked}
-              onClick={() => !booked && setSlot(s)}
+              oonClick={() => !booked && setSlot(cleanSlot)}
               style={{
                 ...styles.slotBtn,
                 background: booked ? "#1e293b" : selected ? sportConfig.color : "transparent",
@@ -693,24 +725,25 @@ export default function App() {
   const [bookings, setBookings] = useState([]);
   const [view, setView] = useState("home");
   const [adminLoggedIn, setAdminLoggedIn] = useState(false);
-
+const [isFirebaseReady, setIsFirebaseReady] = useState(false);
   useEffect(() => {
-    console.log("🔥 Connecting to Firebase real-time...");
+  console.log("🔥 Connecting to Firebase...");
+  
+  const q = query(collection(db, "bookings"), orderBy("createdAt", "desc"));
+  const unsubscribe = onSnapshot(q, (snapshot) => {
+    const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    console.log("📊 Bookings loaded:", data.length);
+    setBookings(data);
     
-    const q = query(collection(db, "bookings"), orderBy("createdAt", "desc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-      console.log("📊 Bookings updated:", data.length);
-      setBookings(data);
-    }, (error) => {
-      console.error("❌ Firebase error:", error);
-    });
+    // 🔥 FIX: Mark Firebase ready
+    setIsFirebaseReady(true);
+  }, (error) => {
+    console.error("❌ Firebase error:", error);
+    setIsFirebaseReady(true); // Still ready even on error
+  });
 
-    return () => {
-      console.log("🔌 Firebase listener removed");
-      unsubscribe();
-    };
-  }, []);
+  return () => unsubscribe();
+}, []);
 
   const handleCancel = useCallback((id) => {
     deleteDoc(doc(db, "bookings", id));
@@ -743,9 +776,9 @@ export default function App() {
       <main style={styles.main}>
         <Hero />
         <div style={styles.contentGrid}>
-          <div><BookingForm bookedSlots={bookings} /></div>
-          <div><TodayView bookedSlots={bookings} /></div>
-        </div>
+  <div><BookingForm bookedSlots={bookings} isFirebaseReady={isFirebaseReady} /></div>
+  <div><TodayView bookedSlots={bookings} isFirebaseReady={isFirebaseReady} /></div>
+</div>
       </main>
 
       {/* CONTACT SECTION */}
