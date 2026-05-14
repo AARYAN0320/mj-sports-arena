@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { initializeApp } from "firebase/app";
 import {
-  getFirestore, collection, addDoc, getDocs, deleteDoc,
+  getFirestore, collection, addDoc, deleteDoc,
   doc, onSnapshot, query, orderBy
 } from "firebase/firestore";
 import QRCode from "qrcode";
@@ -19,8 +19,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-console.log("Firebase Project ID:", import.meta.env.VITE_FIREBASE_PROJECT_ID);
-
+// ─── SLOT GENERATOR ───────────────────────────────────────────────────────────
 function generateSlots(startHour, endHour, duration = 1, courts = 1) {
   const slots = [];
   for (let h = startHour; h < endHour; h += duration) {
@@ -171,6 +170,7 @@ const styles = {
     color: "#e2e8f0",
     fontSize: "1rem",
     transition: "all 0.2s",
+    boxSizing: "border-box",
   },
   slotBtn: {
     padding: "0.875rem 1rem",
@@ -190,6 +190,7 @@ const styles = {
     cursor: "pointer",
     fontSize: "0.875rem",
     transition: "all 0.2s",
+    color: "#000",
   },
   secondaryBtn: {
     padding: "1rem 1.5rem",
@@ -204,10 +205,7 @@ const styles = {
   },
   overlay: {
     position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: 0, left: 0, right: 0, bottom: 0,
     background: "rgba(0,0,0,0.8)",
     display: "flex",
     alignItems: "center",
@@ -282,44 +280,39 @@ const styles = {
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 const getTodayStr = () => new Date().toISOString().split("T")[0];
 
-const formatDate = (dateStr) => {
-  if (!dateStr) return "";
-  const d = new Date(dateStr + "T00:00:00");
-  return d.toLocaleDateString("en-IN", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-};
-
 const formatCurrency = (n) =>
-  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
-// 🔥 NEW FIXED WhatsApp function
-const sendWhatsAppFixed = (booking) => {
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(n);
+
+// ✅ FIX 1: WhatsApp opens IMMEDIATELY (not in setTimeout)
+// Called directly from a button click — browser allows popups
+const openWhatsApp = (booking) => {
   const sport = CONFIG.sports[booking.sport];
-  const cleanWhatsApp = CONFIG.whatsappNumber.replace(/[^0-9]/g, ''); // Remove +,-,spaces
-  
-  const message = `🏟️ MJ Sports Arena - BOOKING CONFIRMED!%0A%0A` +
-    `👤 ${booking.name}%0A` +
+  const clean = CONFIG.whatsappNumber.replace(/[^0-9]/g, "");
+  const msg =
+    `🏟️ MJ Sports Arena - BOOKING CONFIRMED!%0A%0A` +
+    `👤 ${encodeURIComponent(booking.name)}%0A` +
     `📱 ${booking.phone}%0A` +
-    `⚽ ${sport.emoji} ${sport.name}%0A` +
+    `${sport.emoji} ${sport.name}%0A` +
     `📅 ${booking.date}%0A` +
-    `⏰ ${booking.slot}%0A%0A` +
+    `⏰ ${encodeURIComponent(booking.slot)}%0A%0A` +
     `💰 ${formatCurrency(sport.pricePerHour)}%0A` +
     `📍 Kharar, Punjab`;
-
-  const url = `https://wa.me/${cleanWhatsApp}?text=${message}`;
-  
-  console.log("📱 WhatsApp opening:", url);
-  window.open(url, '_blank', 'noopener,noreferrer');
+  window.open(`https://wa.me/${clean}?text=${msg}`, "_blank", "noopener,noreferrer");
 };
 
 // ─── COMPONENTS ───────────────────────────────────────────────────────────────
 function Hero() {
   return (
     <div style={styles.hero}>
-      <h1 style={{ fontSize: "3rem", fontWeight: 900, margin: "0 0 1rem", background: "linear-gradient(135deg, #3b82f6, #8b5cf6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+      <h1 style={{
+        fontSize: "3rem", fontWeight: 900, margin: "0 0 1rem",
+        background: "linear-gradient(135deg, #3b82f6, #8b5cf6)",
+        WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text"
+      }}>
         MJ Sports Arena
       </h1>
       <p style={{ fontSize: "1.25rem", color: "#94a3b8", maxWidth: "600px", margin: "0 auto", lineHeight: 1.6 }}>
@@ -343,78 +336,251 @@ function QRModal({ sport, onClose }) {
   return (
     <div style={styles.overlay} onClick={onClose}>
       <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ margin: "0 0 4px", fontSize: 18, fontFamily: "'Inter', sans-serif" }}>Pay via UPI</h3>
-        <p style={{ margin: "0 0 16px", color: "#94a3b8", fontSize: 13 }}>Scan to pay {formatCurrency(price)}</p>
+        <h3 style={{ margin: "0 0 4px", fontSize: 18 }}>Pay via UPI</h3>
+        <p style={{ margin: "0 0 16px", color: "#94a3b8", fontSize: 13 }}>
+          Scan to pay {formatCurrency(price)}
+        </p>
         {qrUrl && <img src={qrUrl} alt="UPI QR" style={{ borderRadius: 12, width: 220 }} />}
-        <p style={{ margin: "12px 0 0", color: "#64748b", fontSize: 12 }}>UPI ID: <strong style={{ color: "#e2e8f0" }}>{CONFIG.upiId}</strong></p>
+        <p style={{ margin: "12px 0 0", color: "#64748b", fontSize: 12 }}>
+          UPI ID: <strong style={{ color: "#e2e8f0" }}>{CONFIG.upiId}</strong>
+        </p>
         <button style={styles.closeBtn} onClick={onClose}>Close</button>
       </div>
     </div>
   );
 }
-{/* 🔥 EMERGENCY DEBUG BUTTONS */}
-<div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "8px" }}>
-  
-  {/* Test Firebase Save */}
-  <button 
-    onClick={async () => {
-      try {
-        const testDoc = await addDoc(collection(db, "bookings"), {
-          test: true,
-          timestamp: new Date().toISOString(),
-          message: "Firebase test successful!"
-        });
-        alert(`✅ Firebase WORKS! Doc ID: ${testDoc.id}`);
-      } catch(e) {
-        alert(`❌ Firebase FAILED: ${e.message}`);
-      }
-    }}
-    style={{ 
-      background: "#10b981", color: "white", 
-      padding: "12px", borderRadius: "8px", 
-      border: "none", fontSize: "14px", fontWeight: "600"
-    }}
-  >
-    🧪 Test Firebase Save
-  </button>
-  
-  {/* Test WhatsApp */}
-  <button 
-    onClick={() => {
-      window.open('https://wa.me/919041528165?text=Test%20WhatsApp', '_blank');
-    }}
-    style={{ 
-      background: "#25D366", color: "white", 
-      padding: "12px", borderRadius: "8px", 
-      border: "none", fontSize: "14px", fontWeight: "600"
-    }}
-  >
-    🧪 Test WhatsApp
-  </button>
-  
-  {/* Real Booking */}
-  <button
-    onClick={handleSubmit}
-    disabled={loading}
-    style={{ ...styles.primaryBtn, background: sportConfig.color }}
-  >
-    {loading ? "Booking..." : `Confirm — ${formatCurrency(sportConfig.pricePerHour)}`}
-  </button>
-</div>
+
+function BookingForm({ bookedSlots, isFirebaseReady }) {
+  const [sport, setSport] = useState("cricket");
+  const [date, setDate] = useState(getTodayStr());
+  const [slot, setSlot] = useState("");
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [showQR, setShowQR] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState("");
+
+  const sportConfig = CONFIG.sports[sport];
+
+  const bookedSlotsForDay = useMemo(() => {
+    if (!isFirebaseReady) return [];
+    return bookedSlots
+      .filter((b) => b.sport === sport && b.date === date && typeof b.slot === "string")
+      .map((b) => b.slot.trim());
+  }, [bookedSlots, sport, date, isFirebaseReady]);
+
+  // ✅ FIX 2: handleSubmit saves to Firebase and returns the booking object
+  // WhatsApp is opened by the button click handler, not inside setTimeout
+  const handleSubmit = async () => {
+    if (loading) return;
+
+    if (!slot || !name.trim() || !phone.trim()) {
+      setError("Please fill all fields and select a slot.");
+      return null; // return null so caller knows it failed
+    }
+    if (!/^\d{10}$/.test(phone.replace(/\s/g, ""))) {
+      setError("Enter a valid 10-digit phone number.");
+      return null;
+    }
+
+    setError("");
+    setLoading(true);
+
+    const booking = {
+      sport,
+      date,
+      slot: slot.trim(),
+      name: name.trim(),
+      phone: phone.trim(),
+      amount: sportConfig.pricePerHour,
+      createdAt: new Date().toISOString(),
+    };
+
+    try {
+      // ✅ FIX 3: await the addDoc so we know save completed before clearing form
+      const docRef = await addDoc(collection(db, "bookings"), booking);
+      console.log("✅ Saved to Firebase with ID:", docRef.id);
+
+      // Clear form AFTER confirmed save
+      setName("");
+      setPhone("");
+      setSlot("");
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+
+      return booking; // ✅ Return booking so button handler can open WhatsApp
+    } catch (err) {
+      console.error("❌ Firebase save error:", err);
+      setError(`Booking failed: ${err.message}`);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!isFirebaseReady) {
+    return (
+      <div style={styles.formCard}>
+        <div style={{
+          textAlign: "center", padding: "3rem", color: "#94a3b8",
+          display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem"
+        }}>
+          <div style={{ fontSize: "2.5rem" }}>⚡</div>
+          <div style={{ fontSize: "1.1rem", fontWeight: 600 }}>Loading available slots...</div>
+          <div style={{ fontSize: "0.9rem", opacity: 0.7 }}>Connecting to Firebase</div>
+        </div>
+      </div>
+    );
+  }
+
+  const today = getTodayStr();
+
+  return (
+    <div style={styles.formCard}>
+      <h2 style={{ ...styles.sectionTitle, marginBottom: 24 }}>Book Your Slot</h2>
+
+      {/* Sport selector */}
+      <div style={styles.sportToggle}>
+        {Object.entries(CONFIG.sports).map(([key, s]) => (
+          <button
+            key={key}
+            onClick={() => { setSport(key); setSlot(""); }}
+            style={{
+              ...styles.sportBtn,
+              background: sport === key ? s.color : "transparent",
+              color: sport === key ? "#000" : "#94a3b8",
+              border: `1.5px solid ${sport === key ? s.color : "#334155"}`,
+            }}
+          >
+            <span style={{ fontSize: 20 }}>{s.emoji}</span>
+            <span style={{ fontWeight: 600 }}>{s.name}</span>
+            <span style={{ fontSize: 12, opacity: 0.8 }}>{formatCurrency(s.pricePerHour)}/hr</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Date */}
+      <label style={styles.label}>Select Date</label>
+      <input
+        type="date"
+        min={today}
+        value={date}
+        onChange={(e) => { setDate(e.target.value); setSlot(""); }}
+        style={styles.input}
+      />
+
+      {/* Slots */}
+      <label style={styles.label}>Select Time Slot</label>
+      <div style={{ maxHeight: "280px", overflowY: "auto", marginBottom: "1rem", display: "flex", flexDirection: "column", gap: 6 }}>
+        {sportConfig.slots.map((s) => {
+          const cleanSlot = s.trim();
+          const booked = bookedSlotsForDay.includes(cleanSlot);
+          const selected = slot === cleanSlot;
+          return (
+            <button
+              key={s}
+              disabled={booked}
+              onClick={() => !booked && setSlot(cleanSlot)}
+              style={{
+                ...styles.slotBtn,
+                background: booked ? "#1e293b" : selected ? sportConfig.color : "transparent",
+                color: booked ? "#475569" : selected ? "#000" : "#cbd5e1",
+                border: `1.5px solid ${booked ? "#1e293b" : selected ? sportConfig.color : "#334155"}`,
+                cursor: booked ? "not-allowed" : "pointer",
+                textDecoration: booked ? "line-through" : "none",
+                width: "100%",
+              }}
+            >
+              {s} {booked ? "— Booked" : ""}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Name */}
+      <label style={styles.label}>Your Name</label>
+      <input
+        type="text"
+        placeholder="Enter your full name"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        style={styles.input}
+      />
+
+      {/* Phone */}
+      <label style={styles.label}>Phone Number</label>
+      <input
+        type="tel"
+        placeholder="10-digit mobile number"
+        value={phone}
+        maxLength={10}
+        onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
+        style={styles.input}
+      />
+
+      {error && <p style={styles.errorText}>⚠️ {error}</p>}
+      {success && (
+        <div style={styles.successBox}>
+          ✅ Booking saved to Firebase successfully!
+        </div>
+      )}
+
+      {/* ✅ FIX: Confirm button saves AND opens WhatsApp in the same click handler */}
+      <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+        <button
+          disabled={loading || !slot || !name || !phone}
+          onClick={async () => {
+            // Save first, then open WhatsApp immediately in same click event
+            const saved = await handleSubmit();
+            if (saved) {
+              // ✅ This runs in the same user-gesture context → browser allows popup
+              openWhatsApp(saved);
+            }
+          }}
+          style={{
+            ...styles.primaryBtn,
+            background: (!slot || !name || !phone || loading) ? "#334155" : sportConfig.color,
+            color: (!slot || !name || !phone || loading) ? "#64748b" : "#000",
+            flex: 2,
+            cursor: (!slot || !name || !phone || loading) ? "not-allowed" : "pointer",
+          }}
+        >
+          {loading ? "Saving..." : `Confirm & WhatsApp — ${formatCurrency(sportConfig.pricePerHour)}`}
+        </button>
+
+        <button
+          onClick={() => setShowQR(true)}
+          style={{ ...styles.secondaryBtn, flex: 1 }}
+          disabled={!slot}
+        >
+          📱 Pay QR
+        </button>
+      </div>
+
+      {showQR && <QRModal sport={sport} onClose={() => setShowQR(false)} />}
+    </div>
+  );
+}
 
 function TodayView({ bookedSlots }) {
   const [filter, setFilter] = useState("all");
   const today = getTodayStr();
-  const todayBookings = useMemo(() =>
-    bookedSlots.filter((b) => b.date === today),
+
+  const todayBookings = useMemo(
+    () => bookedSlots.filter((b) => b.date === today),
     [bookedSlots, today]
   );
-  const displayed = filter === "all" ? todayBookings : todayBookings.filter((b) => b.sport === filter);
+
+  const displayed =
+    filter === "all"
+      ? todayBookings
+      : todayBookings.filter((b) => b.sport === filter);
 
   return (
     <div style={styles.formCard}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h2 style={styles.sectionTitle}>Today's Availability</h2>
+        <h2 style={styles.sectionTitle}>Today's Bookings</h2>
         <div style={{ display: "flex", gap: 6 }}>
           {["all", "cricket", "pickleball"].map((f) => (
             <button
@@ -435,7 +601,9 @@ function TodayView({ bookedSlots }) {
 
       {displayed.length === 0 ? (
         <p style={{ color: "#475569", textAlign: "center", padding: "24px 0" }}>
-          {filter === "all" ? "No bookings today yet!" : `No ${CONFIG.sports[filter]?.name} bookings today`}
+          {filter === "all"
+            ? "No bookings today yet!"
+            : `No ${CONFIG.sports[filter]?.name} bookings today`}
         </p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -487,7 +655,10 @@ function AdminLogin({ onLogin }) {
             placeholder="Enter admin password"
           />
           {error && <p style={styles.errorText}>{error}</p>}
-          <button type="submit" style={{ ...styles.primaryBtn, background: "#3b82f6", width: "100%", marginTop: "1rem" }}>
+          <button
+            type="submit"
+            style={{ ...styles.primaryBtn, background: "#3b82f6", color: "#fff", width: "100%", marginTop: "1rem" }}
+          >
             Login
           </button>
         </form>
@@ -498,17 +669,33 @@ function AdminLogin({ onLogin }) {
 
 function AdminDashboard({ bookings, onCancel, onLogout }) {
   const today = getTodayStr();
-
-  const todayBookings = bookings.filter(b => b.date === today);
+  const todayBookings = bookings.filter((b) => b.date === today);
+  const total = todayBookings.reduce((sum, b) => sum + (b.amount || 0), 0);
 
   return (
     <div style={{ background: "#020817", minHeight: "100vh", color: "#e2e8f0" }}>
       <div style={styles.nav}>
-        <span style={styles.navBrand}>Admin Dashboard</span>
-        <button onClick={onLogout} style={{ ...styles.adminBtn, background: "#ef4444" }}>Logout</button>
+        <span style={styles.navBrand}>🛡️ Admin Dashboard</span>
+        <button onClick={onLogout} style={{ ...styles.adminBtn, background: "#ef4444" }}>
+          Logout
+        </button>
       </div>
-      
+
       <div style={styles.main}>
+        {/* Summary */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1rem", marginBottom: "2rem" }}>
+          {[
+            { label: "Today's Bookings", value: todayBookings.length, color: "#3b82f6" },
+            { label: "Today's Revenue", value: formatCurrency(total), color: "#22c55e" },
+            { label: "Total Bookings", value: bookings.length, color: "#8b5cf6" },
+          ].map((stat) => (
+            <div key={stat.label} style={{ ...styles.formCard, textAlign: "center" }}>
+              <div style={{ fontSize: "2rem", fontWeight: 800, color: stat.color }}>{stat.value}</div>
+              <div style={{ color: "#64748b", fontSize: "0.875rem", marginTop: 4 }}>{stat.label}</div>
+            </div>
+          ))}
+        </div>
+
         <div style={styles.formCard}>
           <h2 style={styles.sectionTitle}>Today's Bookings ({todayBookings.length})</h2>
           {todayBookings.length === 0 ? (
@@ -518,28 +705,35 @@ function AdminDashboard({ bookings, onCancel, onLogout }) {
               {todayBookings.map((booking) => {
                 const sport = CONFIG.sports[booking.sport];
                 return (
-                  <div key={booking.id} style={{
-                    ...styles.bookingRow,
-                    borderLeft: `4px solid ${sport.color}`,
-                    padding: "1.25rem",
-                  }}>
+                  <div
+                    key={booking.id}
+                    style={{
+                      ...styles.bookingRow,
+                      borderLeft: `4px solid ${sport?.color}`,
+                      padding: "1.25rem",
+                    }}
+                  >
                     <div style={{ display: "flex", alignItems: "center", gap: "1rem", flex: 1 }}>
-                      <span style={{ fontSize: 24 }}>{sport.emoji}</span>
+                      <span style={{ fontSize: 24 }}>{sport?.emoji}</span>
                       <div>
                         <div style={{ fontWeight: 700, fontSize: "1.1rem" }}>{booking.slot}</div>
-                        <div style={{ color: "#94a3b8" }}>{booking.name} • {booking.phone}</div>
+                        <div style={{ color: "#94a3b8", fontSize: "0.875rem" }}>
+                          {booking.name} • {booking.phone}
+                        </div>
+                        <div style={{ color: "#64748b", fontSize: "0.75rem" }}>{booking.date}</div>
                       </div>
                     </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontWeight: 700, color: sport.color }}>{formatCurrency(booking.amount)}</div>
+                    <div style={{ textAlign: "right", display: "flex", flexDirection: "column", gap: 8 }}>
+                      <div style={{ fontWeight: 700, color: sport?.color }}>
+                        {formatCurrency(booking.amount)}
+                      </div>
                       <button
                         onClick={() => {
-                          if (confirm("Cancel this booking?")) {
+                          if (window.confirm(`Cancel booking for ${booking.name} — ${booking.slot}?`)) {
                             onCancel(booking.id);
                           }
                         }}
                         style={{
-                          marginTop: "0.5rem",
                           padding: "0.5rem 1rem",
                           background: "#ef4444",
                           color: "white",
@@ -547,9 +741,10 @@ function AdminDashboard({ bookings, onCancel, onLogout }) {
                           borderRadius: "8px",
                           cursor: "pointer",
                           fontSize: "0.875rem",
+                          fontWeight: 600,
                         }}
                       >
-                        Cancel
+                        ✕ Cancel
                       </button>
                     </div>
                   </div>
@@ -568,28 +763,38 @@ export default function App() {
   const [bookings, setBookings] = useState([]);
   const [view, setView] = useState("home");
   const [adminLoggedIn, setAdminLoggedIn] = useState(false);
-const [isFirebaseReady, setIsFirebaseReady] = useState(false);
-  useEffect(() => {
-  console.log("🔥 Connecting to Firebase...");
-  
-  const q = query(collection(db, "bookings"), orderBy("createdAt", "desc"));
-  const unsubscribe = onSnapshot(q, (snapshot) => {
-    const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-    console.log("📊 Bookings loaded:", data.length);
-    setBookings(data);
-    
-    // 🔥 FIX: Mark Firebase ready
-    setIsFirebaseReady(true);
-  }, (error) => {
-    console.error("❌ Firebase error:", error);
-    setIsFirebaseReady(true); // Still ready even on error
-  });
+  const [isFirebaseReady, setIsFirebaseReady] = useState(false);
 
-  return () => unsubscribe();
-}, []);
+  useEffect(() => {
+    console.log("🔥 Connecting to Firebase...");
+    const q = query(collection(db, "bookings"), orderBy("createdAt", "desc"));
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+        console.log("📊 Bookings loaded:", data.length);
+        setBookings(data);
+        setIsFirebaseReady(true);
+      },
+      (error) => {
+        console.error("❌ Firestore error:", error.code, error.message);
+        // Common fix reminder
+        if (error.code === "permission-denied") {
+          console.error(
+            "🔒 FIRESTORE RULES ISSUE: Go to Firebase Console → Firestore → Rules and set:\n" +
+            "rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read, write: if true;\n    }\n  }\n}"
+          );
+        }
+        setIsFirebaseReady(true);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
 
   const handleCancel = useCallback((id) => {
-    deleteDoc(doc(db, "bookings", id));
+    deleteDoc(doc(db, "bookings", id)).catch(console.error);
   }, []);
 
   if (view === "adminLogin" && !adminLoggedIn) {
@@ -598,13 +803,10 @@ const [isFirebaseReady, setIsFirebaseReady] = useState(false);
 
   if (view === "admin" && adminLoggedIn) {
     return (
-      <AdminDashboard 
-        bookings={bookings} 
-        onCancel={handleCancel} 
-        onLogout={() => { 
-          setAdminLoggedIn(false); 
-          setView("home"); 
-        }} 
+      <AdminDashboard
+        bookings={bookings}
+        onCancel={handleCancel}
+        onLogout={() => { setAdminLoggedIn(false); setView("home"); }}
       />
     );
   }
@@ -613,31 +815,29 @@ const [isFirebaseReady, setIsFirebaseReady] = useState(false);
     <div style={styles.root}>
       <nav style={styles.nav}>
         <span style={styles.navBrand}>🏟️ MJ Sports Arena</span>
-        <button onClick={() => setView("adminLogin")} style={styles.adminBtn}>Admin →</button>
+        <button onClick={() => setView("adminLogin")} style={styles.adminBtn}>
+          Admin →
+        </button>
       </nav>
 
       <main style={styles.main}>
         <Hero />
         <div style={styles.contentGrid}>
-  <div><BookingForm bookedSlots={bookings} isFirebaseReady={isFirebaseReady} /></div>
-  <div><TodayView bookedSlots={bookings} isFirebaseReady={isFirebaseReady} /></div>
-</div>
+          <div>
+            <BookingForm bookedSlots={bookings} isFirebaseReady={isFirebaseReady} />
+          </div>
+          <div>
+            <TodayView bookedSlots={bookings} isFirebaseReady={isFirebaseReady} />
+          </div>
+        </div>
       </main>
 
       {/* CONTACT SECTION */}
-      <div style={{
-        marginTop: "60px",
-        padding: "40px 20px",
-        background: "#0f172a",
-        color: "white"
-      }}>
+      <div style={{ marginTop: "60px", padding: "40px 20px", background: "#0f172a", color: "white" }}>
         <div style={{
-          maxWidth: "1100px",
-          margin: "auto",
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-          gap: "30px",
-          alignItems: "center"
+          maxWidth: "1100px", margin: "auto",
+          display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+          gap: "30px", alignItems: "center"
         }}>
           <div>
             <h2 style={{ fontSize: "26px", marginBottom: "15px" }}>📞 Contact Us</h2>
@@ -648,29 +848,21 @@ const [isFirebaseReady, setIsFirebaseReady] = useState(false);
             <div style={{ marginTop: "20px", display: "flex", gap: "10px", flexWrap: "wrap" }}>
               <a href="tel:+919041528165">
                 <button style={{
-                  padding: "10px 18px",
-                  background: "#22c55e",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontWeight: "600"
+                  padding: "10px 18px", background: "#22c55e",
+                  border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "600", color: "#000"
                 }}>📞 Call Now</button>
               </a>
               <a href={`https://wa.me/${CONFIG.whatsappNumber}`} target="_blank" rel="noopener noreferrer">
                 <button style={{
-                  padding: "10px 18px",
-                  background: "#25D366",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  fontWeight: "600"
+                  padding: "10px 18px", background: "#25D366",
+                  border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "600", color: "#000"
                 }}>💬 WhatsApp</button>
               </a>
             </div>
           </div>
           <div>
             <iframe
-              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3475.4891742999997!2d76.63523431525879!3d30.804999681849997!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMzDCsDUwJzE3LjkiTiA3NmszOSeaCcyOS4zIlE!5e0!3m2!1sen!2sin!4v1699999999999"
+              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3475.4891742999997!2d76.63523431525879!3d30.804999681849997!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMzDCsDUwJzE3LjkiTiA3NmszOScyOS4zIlE!5e0!3m2!1sen!2sin!4v1699999999999"
               width="100%"
               height="300"
               style={{ border: 0, borderRadius: "12px" }}
