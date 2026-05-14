@@ -353,80 +353,55 @@ function QRModal({ sport, onClose }) {
   );
 }
 
-function BookingForm({ bookedSlots, isFirebaseReady = false }) {
-  const [sport, setSport] = useState("cricket");
-  const [date, setDate] = useState(getTodayStr());
-  const [slot, setSlot] = useState("");
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [showQR, setShowQR] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState("");
-
-  const sportConfig = CONFIG.sports[sport];
-  const bookedSlotsForDay = useMemo(() => {
-  if (!isFirebaseReady) return [];
+{/* 🔥 EMERGENCY DEBUG BUTTONS */}
+<div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "8px" }}>
   
-  return bookedSlots
-    .filter((b) => 
-      b.sport === sport && 
-      b.date === date && 
-      typeof b.slot === 'string'
-    )
-    .map((b) => b.slot.trim());
-}, [bookedSlots, sport, date, isFirebaseReady]);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (loading) return;
-
-    if (!slot || !name.trim() || !phone.trim()) {
-      setError("Please fill all fields and select a slot.");
-      return;
-    }
-    if (!/^\d{10}$/.test(phone.replace(/\s/g, ""))) {
-      setError("Enter a valid 10-digit phone number.");
-      return;
-    }
-
-    setError("");
-    setLoading(true);
-
-    try {
-      const booking = {
-        sport,
-        date,
-        slot: slot.trim(),
-        name: name.trim(),
-        phone: phone.trim(),
-        amount: sportConfig.pricePerHour,
-        createdAt: new Date().toISOString(),
-      };
-
-      console.log("💾 Saving to Firebase:", booking);
-      await addDoc(collection(db, "bookings"), booking);
-      
-      console.log("✅ Booking saved successfully!");
-      
-      setName("");
-      setPhone("");
-      setSlot("");
-      setSuccess(true);
-      setTimeout(() => {
-  sendWhatsAppFixed(booking);  // 🔥 Use fixed function
-  setSuccess(false);
-}, 800); // Slightly faster
-
-    } catch (e) {
-      console.error("❌ Error:", e);
-      setError("Booking failed. Check internet connection.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-const today = getTodayStr();
+  {/* Test Firebase Save */}
+  <button 
+    onClick={async () => {
+      try {
+        const testDoc = await addDoc(collection(db, "bookings"), {
+          test: true,
+          timestamp: new Date().toISOString(),
+          message: "Firebase test successful!"
+        });
+        alert(`✅ Firebase WORKS! Doc ID: ${testDoc.id}`);
+      } catch(e) {
+        alert(`❌ Firebase FAILED: ${e.message}`);
+      }
+    }}
+    style={{ 
+      background: "#10b981", color: "white", 
+      padding: "12px", borderRadius: "8px", 
+      border: "none", fontSize: "14px", fontWeight: "600"
+    }}
+  >
+    🧪 Test Firebase Save
+  </button>
+  
+  {/* Test WhatsApp */}
+  <button 
+    onClick={() => {
+      window.open('https://wa.me/919041528165?text=Test%20WhatsApp', '_blank');
+    }}
+    style={{ 
+      background: "#25D366", color: "white", 
+      padding: "12px", borderRadius: "8px", 
+      border: "none", fontSize: "14px", fontWeight: "600"
+    }}
+  >
+    🧪 Test WhatsApp
+  </button>
+  
+  {/* Real Booking */}
+  <button
+    onClick={handleSubmit}
+    disabled={loading}
+    style={{ ...styles.primaryBtn, background: sportConfig.color }}
+  >
+    {loading ? "Booking..." : `Confirm — ${formatCurrency(sportConfig.pricePerHour)}`}
+  </button>
+</div>
 
 // 🔥 ADD THIS BLOCK HERE 👇
 if (!isFirebaseReady) {
@@ -558,7 +533,6 @@ if (!isFirebaseReady) {
       {showQR && <QRModal sport={sport} onClose={() => setShowQR(false)} />}
     </div>
   );
-}
 
 function TodayView({ bookedSlots }) {
   const [filter, setFilter] = useState("all");
